@@ -111,3 +111,45 @@ pub fn dns_analyzer() {
 		guard.map.clear();
 	}
 }
+
+pub fn syn_flood_analyzer() {
+	loop {
+		std::thread::sleep(std::time::Duration::from_secs(CONFIG.analyzer.tcp_syn_flood.cycle));
+
+		let guard = caches::TCP_SYN_FLOOD_CACHE.0.lock().unwrap();
+
+		let mut guard = caches::TCP_SYN_FLOOD_CACHE.1.wait(guard).unwrap();
+
+		tracing::debug!(elements = guard.map.len(), "Tcp SYN flood cache");
+
+		let mut triggered_for = Vec::new();
+
+		for ip in guard.dirty.iter() {
+			let count = *guard.map.get_raw(ip).unwrap();
+
+			if count > CONFIG.analyzer.tcp_syn_flood.trigger_count {
+				triggered_for.push(ip.to_owned());
+
+				tracing::warn!(
+					src = ip.to_string(),
+					count,
+					"Tcp SYN packets are more than {}",
+					CONFIG.analyzer.tcp_syn_flood.trigger_count
+				);
+			}
+		}
+
+		// Reset the dirty set
+		guard.dirty.clear();
+
+		// Remove cached data that already triggered an alert
+		for ip in triggered_for {
+			guard.map.remove(&ip);
+		}
+
+		// Clean outdated cached data and reduce size if the maximum size exceeded
+		guard.map.cleanup();
+
+		tracing::debug!(elements = guard.map.len(), "Tcp SYN flood cache");
+	}
+}

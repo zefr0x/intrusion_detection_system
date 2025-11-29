@@ -65,6 +65,9 @@ async fn main() {
 	rayon::spawn(move || {
 		analyzers::dns_analyzer();
 	});
+	rayon::spawn(move || {
+		analyzers::syn_flood_analyzer();
+	});
 
 	// Join the capturing threads
 	iface_handlers_set.join_all().await;
@@ -130,6 +133,10 @@ fn handel_layer4(payload: &[u8], protocol: IpNextHeaderProtocol, ip_set: IpPair)
 		IpNextHeaderProtocols::Tcp => {
 			if let Some(tcp) = pnet::packet::tcp::TcpPacket::new(payload) {
 				caches::cache_event(CachableEvent::Port(ip_set.clone(), tcp.get_destination()));
+
+				if tcp.get_flags() & pnet::packet::tcp::TcpFlags::SYN != 0 {
+					caches::cache_event(CachableEvent::TcpSyn(ip_set.src));
+				}
 
 				handel_layer5(tcp.payload(), ip_set);
 			} else {

@@ -9,6 +9,10 @@ max_size = 30 # Optional
 entiry_ttl = 13
 max_count = 30 # Optional
 
+[cache.tcp_syn_flood]
+entiry_ttl = 13
+max_count = 30 # Optional
+
 [analyzer.uploaded_data_sizes]
 cycle = 5
 trigger_size = 5000000
@@ -20,3 +24,7 @@ trigger_count = 20
 [analyzer.dns]
 cycle = 1
 malicious_domains = ["google.com", "gmail.com"]
+
+[analyzer.tcp_syn_flood]
+cycle = 5
+trigger_count = 50

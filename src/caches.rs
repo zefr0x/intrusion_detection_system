@@ -71,10 +71,32 @@ pub struct DnsCache {
 pub static DNS_CACHE: LazyLock<Arc<(Mutex<DnsCache>, Condvar)>> =
 	LazyLock::new(|| Arc::new((Mutex::new(DnsCache::default()), Condvar::new())));
 
+pub struct TcpSynFloodCache {
+	pub map: TtlHashMap<IpAddr, u32>,
+	pub dirty: HashSet<IpAddr>,
+}
+
+impl Default for TcpSynFloodCache {
+	fn default() -> Self {
+		let mut map = TtlHashMap::new(Duration::from_secs(CONFIG.cache.tcp_syn_flood.entiry_ttl));
+		map.autoclean = ttlhashmap::AutoClean::Never;
+		map.max_nodes = CONFIG.cache.tcp_syn_flood.max_size;
+
+		Self {
+			map,
+			dirty: Default::default(),
+		}
+	}
+}
+
+pub static TCP_SYN_FLOOD_CACHE: LazyLock<Arc<(Mutex<TcpSynFloodCache>, Condvar)>> =
+	LazyLock::new(|| Arc::new((Mutex::new(TcpSynFloodCache::default()), Condvar::new())));
+
 pub enum CachableEvent {
 	IpSize(IpAddr, u32),
 	Port(IpPair, u16),
 	Dns(IpAddr, String),
+	TcpSyn(IpAddr),
 }
 
 pub fn cache_event(event: CachableEvent) {
@@ -109,6 +131,20 @@ pub fn cache_event(event: CachableEvent) {
 			}
 			guard.map.get_mut(&ip).unwrap().insert(domain);
 			DNS_CACHE.1.notify_all();
+		}
+		CachableEvent::TcpSyn(ip) => {
+			let mut guard = TCP_SYN_FLOOD_CACHE.0.lock().unwrap();
+			match guard.map.get_mut(&ip) {
+				Some(value) => {
+					*value += 1;
+				}
+				None => {
+					guard.map.insert(ip, 1);
+				}
+			}
+
+			guard.dirty.insert(ip);
+			TCP_SYN_FLOOD_CACHE.1.notify_all();
 		}
 	}
 }

@@ -33,6 +33,7 @@ impl Default for Interface {
 pub struct Cache {
 	pub total_data_size: TotalDataSizeCacheConfig,
 	pub ports_touched: PortsTouchedCacheConfig,
+	pub tcp_syn_flood: TcpSynFloodCacheConfig,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -67,12 +68,29 @@ impl Default for PortsTouchedCacheConfig {
 	}
 }
 
+#[derive(Debug, serde::Deserialize)]
+pub struct TcpSynFloodCacheConfig {
+	#[serde(default)]
+	pub entiry_ttl: u64,
+	pub max_size: Option<usize>,
+}
+
+impl Default for TcpSynFloodCacheConfig {
+	fn default() -> Self {
+		Self {
+			entiry_ttl: 13,
+			max_size: Some(30),
+		}
+	}
+}
+
 #[derive(Debug, Default, serde::Deserialize)]
 #[serde(default)]
 pub struct Analyzer {
 	pub uploaded_data_sizes: UploadedDataSizesAnalyzerConfig,
 	pub ports_activity: PortsActivityAnalyzerConfig,
 	pub dns: DnsAnalyzerConfig,
+	pub tcp_syn_flood: TcpSynFloodAnalyzerConfig,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -119,6 +137,22 @@ impl Default for DnsAnalyzerConfig {
 		Self {
 			cycle: 1,
 			malicious_domains: vec!["google.com".to_owned(), "gmail.com".to_owned()],
+		}
+	}
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct TcpSynFloodAnalyzerConfig {
+	#[serde(default)]
+	pub cycle: u64,
+	pub trigger_count: u32,
+}
+
+impl Default for TcpSynFloodAnalyzerConfig {
+	fn default() -> Self {
+		Self {
+			cycle: 5,
+			trigger_count: 50,
 		}
 	}
 }

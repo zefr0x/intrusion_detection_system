@@ -2,7 +2,7 @@ use crate::caches;
 
 pub fn uploaded_data_sizes_analyzer() {
 	loop {
-		std::thread::sleep(std::time::Duration::from_secs(1));
+		std::thread::sleep(std::time::Duration::from_secs(5));
 
 		let guard = caches::TOTAL_DATA_SIZE_CACHE.0.lock().unwrap();
 
@@ -11,7 +11,7 @@ pub fn uploaded_data_sizes_analyzer() {
 		let mut triggered_for = Vec::new();
 
 		for ip in guard.dirty.iter() {
-			let size = *guard.map.get(ip).unwrap();
+			let size = *guard.map.get_raw(ip).unwrap();
 
 			if size >= 5000000 {
 				triggered_for.push(ip.to_owned());
@@ -19,17 +19,25 @@ pub fn uploaded_data_sizes_analyzer() {
 				tracing::warn!(dst = ip.to_string(), size, "Data larger than 5MB uploaded");
 			}
 		}
+
+		// Reset the dirty set
 		guard.dirty.clear();
 
+		// Remove cached data that already triggered an alert
 		for ip in triggered_for {
 			guard.map.remove(&ip);
 		}
+
+		// Clean outdated cached data and reduce size if the maximum size exceeded
+		guard.map.cleanup();
+
+		tracing::trace!(elements = guard.map.len(), "Total data sizes cache");
 	}
 }
 
 pub fn ports_activity_analyzer() {
 	loop {
-		std::thread::sleep(std::time::Duration::from_secs(1));
+		std::thread::sleep(std::time::Duration::from_secs(5));
 
 		let guard = caches::PORTS_TOUCHED_CACHE.0.lock().unwrap();
 
@@ -38,7 +46,7 @@ pub fn ports_activity_analyzer() {
 		let mut triggered_for = Vec::new();
 
 		for ip_set in guard.dirty.iter() {
-			let count = guard.map.get(ip_set).unwrap().len();
+			let count = guard.map.get_raw(ip_set).unwrap().len();
 			if count >= 20 {
 				triggered_for.push(ip_set.to_owned());
 
@@ -50,11 +58,19 @@ pub fn ports_activity_analyzer() {
 				);
 			}
 		}
+
+		// Reset the dirty set
 		guard.dirty.clear();
 
+		// Remove cached data that already triggered an alert
 		for ip_set in triggered_for {
 			guard.map.remove(&ip_set);
 		}
+
+		// Clean outdated cached data and reduce size if the maximum size exceeded
+		guard.map.cleanup();
+
+		tracing::trace!(elements = guard.map.len(), "Ports touched cache");
 	}
 }
 
@@ -68,9 +84,7 @@ pub fn dns_analyzer() {
 
 		let mut triggered_for = Vec::new();
 
-		for ip in guard.dirty.iter() {
-			let qnames = guard.map.get(ip).unwrap();
-
+		for (ip, qnames) in guard.map.iter() {
 			let malicious_domains = ["google.com", "gmail.com"];
 
 			for domain in malicious_domains {
@@ -81,10 +95,8 @@ pub fn dns_analyzer() {
 				}
 			}
 		}
-		guard.dirty.clear();
 
-		for ip_set in triggered_for {
-			guard.map.remove(&ip_set);
-		}
+		// Reset the cache
+		guard.map.clear();
 	}
 }

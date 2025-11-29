@@ -27,6 +27,9 @@ async fn main() {
 	// Initiate interface capturing I/O threads
 	let ifaces = pnet::datalink::interfaces();
 
+	let mut config = pnet::datalink::Config::default();
+	config.read_buffer_size = 4096;
+
 	let mut iface_handlers_set = tokio::task::JoinSet::new();
 
 	for iface in ifaces {
@@ -42,7 +45,7 @@ async fn main() {
 
 			let iface_span = tracing::info_span!(parent: tracing::Span::current(), "Interface", name=iface.name);
 
-			iface_handlers_set.spawn_blocking(move || iface_span.in_scope(|| iface_handler(iface)));
+			iface_handlers_set.spawn_blocking(move || iface_span.in_scope(|| iface_handler(iface, config)));
 		}
 	}
 
@@ -61,8 +64,8 @@ async fn main() {
 	iface_handlers_set.join_all().await;
 }
 
-fn iface_handler(iface: pnet::datalink::NetworkInterface) {
-	let mut reciver = match pnet::datalink::channel(&iface, pnet::datalink::Config::default()) {
+fn iface_handler(iface: pnet::datalink::NetworkInterface, config: pnet::datalink::Config) {
+	let mut reciver = match pnet::datalink::channel(&iface, config) {
 		Ok(pnet::datalink::Channel::Ethernet(_, reciver)) => reciver,
 		_ => panic!("Unsupported data link channel for `{iface}`"),
 	};

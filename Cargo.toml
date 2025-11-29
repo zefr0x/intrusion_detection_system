@@ -7,9 +7,10 @@ edition = "2024"
 dotenvy = { version = "0.15.7" }
 pnet = "0.35.0"
 rayon = "1.11"
+simple-dns = "0.11.0"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "tracing", "sync"] }
 tracing = { version = "0.1", features = ["release_max_level_debug"] }
 tracing-appender = "0.2"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "tracing"] }
-simple-dns = "0.11.0"
+ttlhashmap = "0.1.0"
 

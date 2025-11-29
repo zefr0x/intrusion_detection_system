@@ -2,7 +2,9 @@ use std::{
 	collections::{HashMap, HashSet},
 	net::IpAddr,
 	sync::{Arc, Condvar, LazyLock, Mutex},
+	time::Duration,
 };
+use ttlhashmap::TtlHashMap;
 
 #[derive(PartialEq, Eq, Hash, Debug, Clone)]
 pub struct IpPair {
@@ -16,19 +18,43 @@ impl IpPair {
 	}
 }
 
-#[derive(Default)]
 pub struct TotalDataSizeCache {
-	pub map: HashMap<IpAddr, u32>,
+	pub map: TtlHashMap<IpAddr, u32>,
 	pub dirty: HashSet<IpAddr>,
+}
+
+impl Default for TotalDataSizeCache {
+	fn default() -> Self {
+		let mut map = TtlHashMap::new(Duration::from_secs(13));
+		map.autoclean = ttlhashmap::AutoClean::Never;
+		map.max_nodes = Some(30);
+
+		Self {
+			map,
+			dirty: Default::default(),
+		}
+	}
 }
 
 pub static TOTAL_DATA_SIZE_CACHE: LazyLock<Arc<(Mutex<TotalDataSizeCache>, Condvar)>> =
 	LazyLock::new(|| Arc::new((Mutex::new(TotalDataSizeCache::default()), Condvar::new())));
 
-#[derive(Default)]
 pub struct PortsTouchedCache {
-	pub map: HashMap<IpPair, HashSet<u16>>,
+	pub map: TtlHashMap<IpPair, HashSet<u16>>,
 	pub dirty: HashSet<IpPair>,
+}
+
+impl Default for PortsTouchedCache {
+	fn default() -> Self {
+		let mut map = TtlHashMap::new(Duration::from_secs(13));
+		map.autoclean = ttlhashmap::AutoClean::Never;
+		map.max_nodes = Some(30);
+
+		Self {
+			map,
+			dirty: Default::default(),
+		}
+	}
 }
 
 pub static PORTS_TOUCHED_CACHE: LazyLock<Arc<(Mutex<PortsTouchedCache>, Condvar)>> =
@@ -37,7 +63,6 @@ pub static PORTS_TOUCHED_CACHE: LazyLock<Arc<(Mutex<PortsTouchedCache>, Condvar)
 #[derive(Default)]
 pub struct DnsCache {
 	pub map: HashMap<IpAddr, HashSet<String>>,
-	pub dirty: HashSet<IpAddr>,
 }
 
 pub static DNS_CACHE: LazyLock<Arc<(Mutex<DnsCache>, Condvar)>> =
@@ -53,25 +78,34 @@ pub fn cache_event(event: CachableEvent) {
 	match event {
 		CachableEvent::IpSize(ip, size) => {
 			let mut guard = TOTAL_DATA_SIZE_CACHE.0.lock().unwrap();
-			*guard.map.entry(ip).or_insert(0) += size;
+			match guard.map.get_mut(&ip) {
+				Some(value) => {
+					*value += size;
+				}
+				None => {
+					guard.map.insert(ip, size);
+				}
+			}
+
 			guard.dirty.insert(ip);
 			TOTAL_DATA_SIZE_CACHE.1.notify_all();
 		}
 		CachableEvent::Port(ip_set, port) => {
 			let mut guard = PORTS_TOUCHED_CACHE.0.lock().unwrap();
-			guard.map.entry(ip_set.clone()).or_default();
+			if guard.map.get_mut(&ip_set).is_none() {
+				guard.map.insert(ip_set.clone(), Default::default());
+			}
 			guard.map.get_mut(&ip_set).unwrap().insert(port);
 			guard.dirty.insert(ip_set.clone());
 			PORTS_TOUCHED_CACHE.1.notify_all();
 		}
 		CachableEvent::Dns(ip, domain) => {
 			let mut guard = DNS_CACHE.0.lock().unwrap();
-			guard.map.entry(ip).or_default();
+			if guard.map.get_mut(&ip).is_none() {
+				guard.map.insert(ip.clone(), Default::default());
+			}
 			guard.map.get_mut(&ip).unwrap().insert(domain);
-			guard.dirty.insert(ip);
 			DNS_CACHE.1.notify_all();
 		}
 	}
 }
-
-// TODO: Find a way to clean/cycle the cache when noting is detected.

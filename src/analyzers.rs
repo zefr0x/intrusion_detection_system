@@ -11,7 +11,7 @@ pub fn uploaded_data_sizes_analyzer() {
 
 		let mut guard = caches::TOTAL_DATA_SIZE_CACHE.1.wait(guard).unwrap();
 
-		tracing::trace!(elements = guard.map.len(), "Total data sizes cache");
+		tracing::debug!(elements = guard.map.len(), "Total data sizes cache");
 
 		let mut triggered_for = Vec::new();
 
@@ -41,7 +41,7 @@ pub fn uploaded_data_sizes_analyzer() {
 		// Clean outdated cached data and reduce size if the maximum size exceeded
 		guard.map.cleanup();
 
-		tracing::trace!(elements = guard.map.len(), "Total data sizes cache");
+		tracing::debug!(elements = guard.map.len(), "Total data sizes cache");
 	}
 }
 
@@ -53,7 +53,7 @@ pub fn ports_activity_analyzer() {
 
 		let mut guard = caches::PORTS_TOUCHED_CACHE.1.wait(guard).unwrap();
 
-		tracing::trace!(elements = guard.map.len(), "Ports touched cache");
+		tracing::debug!(elements = guard.map.len(), "Ports touched cache");
 
 		let mut triggered_for = Vec::new();
 
@@ -83,7 +83,7 @@ pub fn ports_activity_analyzer() {
 		// Clean outdated cached data and reduce size if the maximum size exceeded
 		guard.map.cleanup();
 
-		tracing::trace!(elements = guard.map.len(), "Ports touched cache");
+		tracing::debug!(elements = guard.map.len(), "Ports touched cache");
 	}
 }
 

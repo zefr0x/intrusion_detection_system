@@ -4,7 +4,10 @@ use std::{
 	sync::{Arc, Condvar, LazyLock, Mutex},
 	time::Duration,
 };
+
 use ttlhashmap::TtlHashMap;
+
+use crate::config::CONFIG;
 
 #[derive(PartialEq, Eq, Hash, Debug, Clone)]
 pub struct IpPair {
@@ -25,9 +28,9 @@ pub struct TotalDataSizeCache {
 
 impl Default for TotalDataSizeCache {
 	fn default() -> Self {
-		let mut map = TtlHashMap::new(Duration::from_secs(13));
+		let mut map = TtlHashMap::new(Duration::from_secs(CONFIG.cache.total_data_size.entiry_ttl));
 		map.autoclean = ttlhashmap::AutoClean::Never;
-		map.max_nodes = Some(30);
+		map.max_nodes = CONFIG.cache.total_data_size.max_size;
 
 		Self {
 			map,
@@ -46,9 +49,9 @@ pub struct PortsTouchedCache {
 
 impl Default for PortsTouchedCache {
 	fn default() -> Self {
-		let mut map = TtlHashMap::new(Duration::from_secs(13));
+		let mut map = TtlHashMap::new(Duration::from_secs(CONFIG.cache.ports_touched.entiry_ttl));
 		map.autoclean = ttlhashmap::AutoClean::Never;
-		map.max_nodes = Some(30);
+		map.max_nodes = CONFIG.cache.ports_touched.max_size;
 
 		Self {
 			map,
@@ -102,7 +105,7 @@ pub fn cache_event(event: CachableEvent) {
 		CachableEvent::Dns(ip, domain) => {
 			let mut guard = DNS_CACHE.0.lock().unwrap();
 			if guard.map.get_mut(&ip).is_none() {
-				guard.map.insert(ip.clone(), Default::default());
+				guard.map.insert(ip, Default::default());
 			}
 			guard.map.get_mut(&ip).unwrap().insert(domain);
 			DNS_CACHE.1.notify_all();

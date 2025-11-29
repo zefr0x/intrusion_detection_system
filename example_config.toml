@@ -1,0 +1,22 @@
+[interface]
+read_buffer_size = 4096
+
+[cache.total_data_size]
+entiry_ttl = 60
+max_size = 30 # Optional
+
+[cache.ports_touched]
+entiry_ttl = 13
+max_count = 30 # Optional
+
+[analyzer.uploaded_data_sizes]
+cycle = 5
+trigger_size = 5000000
+
+[analyzer.ports_activity]
+cycle = 5
+trigger_count = 20
+
+[analyzer.dns]
+cycle = 1
+malicious_domains = ["google.com", "gmail.com"]

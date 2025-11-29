@@ -5,10 +5,14 @@ use pnet::packet::{
 	ip::{IpNextHeaderProtocol, IpNextHeaderProtocols},
 };
 
-use crate::caches::{CachableEvent, IpPair};
+use crate::{
+	caches::{CachableEvent, IpPair},
+	config::CONFIG,
+};
 
 mod analyzers;
 mod caches;
+mod config;
 
 #[tokio::main]
 async fn main() {
@@ -27,8 +31,10 @@ async fn main() {
 	// Initiate interface capturing I/O threads
 	let ifaces = pnet::datalink::interfaces();
 
-	let mut config = pnet::datalink::Config::default();
-	config.read_buffer_size = 4096;
+	let config = pnet::datalink::Config {
+		read_buffer_size: CONFIG.interface.read_buffer_size,
+		..Default::default()
+	};
 
 	let mut iface_handlers_set = tokio::task::JoinSet::new();
 

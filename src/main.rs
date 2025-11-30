@@ -36,7 +36,7 @@ async fn main() {
 		..Default::default()
 	};
 
-	let mut iface_handlers_set = tokio::task::JoinSet::new();
+	let mut sync_tasks_set = tokio::task::JoinSet::new();
 
 	for iface in ifaces {
 		if iface.is_up() {
@@ -51,26 +51,89 @@ async fn main() {
 
 			let iface_span = tracing::info_span!(parent: tracing::Span::current(), "Interface", name=iface.name);
 
-			iface_handlers_set.spawn_blocking(move || iface_span.in_scope(|| iface_handler(iface, config)));
+			sync_tasks_set.spawn_blocking(move || iface_span.in_scope(|| iface_handler(iface, config)));
 		}
 	}
 
-	//Initiate analysis threads
-	rayon::spawn(move || {
-		analyzers::uploaded_data_sizes_analyzer();
+	// Initiate analysis threads
+	// Wrap them around tokio blocking threads to avoid blocking rayon's limited threads
+	sync_tasks_set.spawn_blocking(|| {
+		loop {
+			// Wait until the cycle time ends
+			std::thread::sleep(std::time::Duration::from_secs(
+				CONFIG.analyzer.uploaded_data_sizes.cycle,
+			));
+
+			// If the dirty set is still empty, wait for it
+			let guard = caches::TOTAL_DATA_SIZE_CACHE.0.lock().unwrap();
+			if guard.dirty.is_empty() {
+				drop(caches::TOTAL_DATA_SIZE_CACHE.1.wait(guard).unwrap());
+			} else {
+				drop(guard);
+			}
+
+			rayon::spawn(move || {
+				analyzers::uploaded_data_sizes_analyzer();
+			});
+		}
 	});
-	rayon::spawn(move || {
-		analyzers::ports_activity_analyzer();
+	sync_tasks_set.spawn_blocking(|| {
+		loop {
+			// Wait until the cycle time ends
+			std::thread::sleep(std::time::Duration::from_secs(CONFIG.analyzer.ports_activity.cycle));
+
+			// If the dirty set is still empty, wait for it
+			let guard = caches::PORTS_TOUCHED_CACHE.0.lock().unwrap();
+			if guard.dirty.is_empty() {
+				drop(caches::PORTS_TOUCHED_CACHE.1.wait(guard).unwrap());
+			} else {
+				drop(guard);
+			}
+
+			rayon::spawn(move || {
+				analyzers::ports_activity_analyzer();
+			});
+		}
 	});
-	rayon::spawn(move || {
-		analyzers::dns_analyzer();
+	sync_tasks_set.spawn_blocking(|| {
+		loop {
+			// Wait until the cycle time ends
+			std::thread::sleep(std::time::Duration::from_secs(CONFIG.analyzer.dns.cycle));
+
+			// If the map is still empty, wait for it
+			let guard = caches::DNS_CACHE.0.lock().unwrap();
+			if guard.map.is_empty() {
+				drop(caches::DNS_CACHE.1.wait(guard).unwrap());
+			} else {
+				drop(guard);
+			}
+
+			rayon::spawn(move || {
+				analyzers::dns_analyzer();
+			});
+		}
 	});
-	rayon::spawn(move || {
-		analyzers::syn_flood_analyzer();
+	sync_tasks_set.spawn_blocking(|| {
+		loop {
+			// Wait until the cycle time ends
+			std::thread::sleep(std::time::Duration::from_secs(CONFIG.analyzer.tcp_syn_flood.cycle));
+
+			// If the dirty set is still empty, wait for it
+			let guard = caches::TCP_SYN_FLOOD_CACHE.0.lock().unwrap();
+			if guard.dirty.is_empty() {
+				drop(caches::TCP_SYN_FLOOD_CACHE.1.wait(guard).unwrap());
+			} else {
+				drop(guard);
+			}
+
+			rayon::spawn(move || {
+				analyzers::syn_flood_analyzer();
+			});
+		}
 	});
 
 	// Join the capturing threads
-	iface_handlers_set.join_all().await;
+	sync_tasks_set.join_all().await;
 }
 
 fn iface_handler(iface: pnet::datalink::NetworkInterface, config: pnet::datalink::Config) {

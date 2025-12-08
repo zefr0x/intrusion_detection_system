@@ -244,10 +244,12 @@ fn handel_layer5(payload: &[u8], ip_set: IpPair) {
 		let ip_set = ip_set.clone();
 		move || {
 			if let Ok(dns) = simple_dns::Packet::parse(payload.as_slice()) {
-				for question in dns.questions {
-					let qname = question.qname.to_string();
+				if !dns.has_flags(simple_dns::PacketFlag::RESPONSE) {
+					for question in dns.questions {
+						let qname = question.qname.to_string();
 
-					cache(CachableEvent::Dns(ip_set.src, qname));
+						cache(CachableEvent::Dns(ip_set.src, qname));
+					}
 				}
 			}
 		}

@@ -14,6 +14,12 @@ mod analyzers;
 mod caches;
 mod config;
 
+static CACHER_SENDER: std::sync::OnceLock<std::sync::mpsc::SyncSender<CachableEvent>> = std::sync::OnceLock::new();
+
+fn cache(event: caches::CachableEvent) {
+	CACHER_SENDER.get().unwrap().send(event).unwrap();
+}
+
 #[tokio::main]
 async fn main() {
 	// Load `.env` file in debug builds
@@ -38,6 +44,16 @@ async fn main() {
 
 	let mut sync_tasks_set = tokio::task::JoinSet::new();
 
+	// Create caching channel
+	let (sender, receiver) = std::sync::mpsc::sync_channel(CONFIG.cache.queue_channel_bound);
+	CACHER_SENDER.set(sender).unwrap();
+
+	// Initiate event cacher thread
+	sync_tasks_set.spawn_blocking(|| {
+		caches::event_cacher(receiver);
+	});
+
+	// Initiate capture threads
 	for iface in ifaces {
 		if iface.is_up() {
 			tracing::info!(
@@ -161,7 +177,7 @@ fn handel_layer3(payload: &[u8], protocol: pnet::packet::ethernet::EtherType) {
 	match protocol {
 		pnet::packet::ethernet::EtherTypes::Ipv4 => {
 			if let Some(ipv4) = pnet::packet::ipv4::Ipv4Packet::new(payload) {
-				caches::cache_event(CachableEvent::IpSize(
+				cache(CachableEvent::IpSize(
 					IpAddr::V4(ipv4.get_destination()),
 					ipv4.get_total_length() as u32,
 				));
@@ -175,7 +191,7 @@ fn handel_layer3(payload: &[u8], protocol: pnet::packet::ethernet::EtherType) {
 		}
 		pnet::packet::ethernet::EtherTypes::Ipv6 => {
 			if let Some(ipv6) = pnet::packet::ipv6::Ipv6Packet::new(payload) {
-				caches::cache_event(CachableEvent::IpSize(
+				cache(CachableEvent::IpSize(
 					IpAddr::V6(ipv6.get_destination()),
 					ipv6.get_payload_length() as u32,
 				));
@@ -195,10 +211,10 @@ fn handel_layer4(payload: &[u8], protocol: IpNextHeaderProtocol, ip_set: IpPair)
 	match protocol {
 		IpNextHeaderProtocols::Tcp => {
 			if let Some(tcp) = pnet::packet::tcp::TcpPacket::new(payload) {
-				caches::cache_event(CachableEvent::Port(ip_set.clone(), tcp.get_destination()));
+				cache(CachableEvent::Port(ip_set.clone(), tcp.get_destination()));
 
 				if tcp.get_flags() & pnet::packet::tcp::TcpFlags::SYN != 0 {
-					caches::cache_event(CachableEvent::TcpSyn(ip_set.src));
+					cache(CachableEvent::TcpSyn(ip_set.src));
 				}
 
 				handel_layer5(tcp.payload(), ip_set);
@@ -208,7 +224,7 @@ fn handel_layer4(payload: &[u8], protocol: IpNextHeaderProtocol, ip_set: IpPair)
 		}
 		IpNextHeaderProtocols::Udp => {
 			if let Some(udp) = pnet::packet::udp::UdpPacket::new(payload) {
-				caches::cache_event(CachableEvent::Port(ip_set.clone(), udp.get_destination()));
+				cache(CachableEvent::Port(ip_set.clone(), udp.get_destination()));
 
 				handel_layer5(udp.payload(), ip_set);
 			} else {
@@ -231,7 +247,7 @@ fn handel_layer5(payload: &[u8], ip_set: IpPair) {
 				for question in dns.questions {
 					let qname = question.qname.to_string();
 
-					caches::cache_event(CachableEvent::Dns(ip_set.src, qname));
+					cache(CachableEvent::Dns(ip_set.src, qname));
 				}
 			}
 		}

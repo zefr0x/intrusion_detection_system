@@ -31,6 +31,7 @@ impl Default for Interface {
 #[derive(Debug, Default, serde::Deserialize)]
 #[serde(default)]
 pub struct Cache {
+	pub queue_channel_bound: usize,
 	pub total_data_size: TotalDataSizeCacheConfig,
 	pub ports_touched: PortsTouchedCacheConfig,
 	pub tcp_syn_flood: TcpSynFloodCacheConfig,

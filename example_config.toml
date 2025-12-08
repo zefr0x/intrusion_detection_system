@@ -1,6 +1,9 @@
 [interface]
 read_buffer_size = 4096
 
+[cache]
+queue_channel_bound = 1024
+
 [cache.total_data_size]
 entiry_ttl = 60
 max_size = 30 # Optional

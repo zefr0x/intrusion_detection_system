@@ -99,7 +99,7 @@ pub enum CachableEvent {
 	TcpSyn(IpAddr),
 }
 
-pub fn cache_event(event: CachableEvent) {
+fn cache_event(event: CachableEvent) {
 	match event {
 		CachableEvent::IpSize(ip, size) => {
 			let mut guard = TOTAL_DATA_SIZE_CACHE.0.lock().unwrap();
@@ -146,5 +146,11 @@ pub fn cache_event(event: CachableEvent) {
 			guard.dirty.insert(ip);
 			TCP_SYN_FLOOD_CACHE.1.notify_all();
 		}
+	}
+}
+
+pub fn event_cacher(reciever: std::sync::mpsc::Receiver<CachableEvent>) {
+	loop {
+		cache_event(reciever.recv().unwrap());
 	}
 }

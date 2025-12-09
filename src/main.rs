@@ -89,7 +89,9 @@ async fn main() {
 			}
 
 			rayon::spawn(move || {
+				tracing::trace!("Started `uploaded_data_sizes_analyzer` cycle");
 				analyzers::uploaded_data_sizes_analyzer();
+				tracing::trace!("Ended `uploaded_data_sizes_analyzer` cycle");
 			});
 		}
 	});
@@ -107,7 +109,9 @@ async fn main() {
 			}
 
 			rayon::spawn(move || {
+				tracing::trace!("Started `ports_activity_analyzer` cycle");
 				analyzers::ports_activity_analyzer();
+				tracing::trace!("Ended `ports_activity_analyzer` cycle");
 			});
 		}
 	});
@@ -125,7 +129,9 @@ async fn main() {
 			}
 
 			rayon::spawn(move || {
+				tracing::trace!("Started `dns_analyzer` cycle");
 				analyzers::dns_analyzer();
+				tracing::trace!("Ended `dns_analyzer` cycle");
 			});
 		}
 	});
@@ -143,7 +149,9 @@ async fn main() {
 			}
 
 			rayon::spawn(move || {
+				tracing::trace!("Started `syn_flood_analyzer` cycle");
 				analyzers::syn_flood_analyzer();
+				tracing::trace!("Ended `syn_flood_analyzer` cycle");
 			});
 		}
 	});

@@ -92,6 +92,7 @@ impl Default for TcpSynFloodCache {
 pub static TCP_SYN_FLOOD_CACHE: LazyLock<Arc<(Mutex<TcpSynFloodCache>, Condvar)>> =
 	LazyLock::new(|| Arc::new((Mutex::new(TcpSynFloodCache::default()), Condvar::new())));
 
+#[derive(Debug)]
 pub enum CachableEvent {
 	IpSize(IpAddr, u32),
 	Port(IpPair, u16),
@@ -100,6 +101,8 @@ pub enum CachableEvent {
 }
 
 fn cache_event(event: CachableEvent) {
+	tracing::trace!(?event, "Caching event");
+
 	match event {
 		CachableEvent::IpSize(ip, size) => {
 			let mut guard = TOTAL_DATA_SIZE_CACHE.0.lock().unwrap();
